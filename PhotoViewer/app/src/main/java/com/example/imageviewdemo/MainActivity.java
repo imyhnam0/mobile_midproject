@@ -2,6 +2,7 @@ package com.example.imageviewdemo;
 
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
@@ -12,6 +13,7 @@ import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -31,39 +33,77 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 public class MainActivity extends AppCompatActivity {
 
     private static final int PICK_IMAGE_REQUEST = 1;
+    private static final String AUTH_TOKEN = "87af38f0adbac939bfd69b8063bb674cc9b85b5c";
+    private static final float TOTAL_CAPACITY_MB = 1024f;
+    private static final String PREFS_NAME = "photo_viewer_prefs";
+    private static final String PREF_FAVORITE_KEYS = "favorite_post_keys";
+    private static final String CURRENT_USERNAME = "yunhyungnam"; // TODO: replace with dynamic user lookup if available.
 
     private final String siteUrl = "https://yunhyungnam.pythonanywhere.com";
     private final String postUrl = siteUrl + "/api_root/Post/";
 
     private TextView statusView;
+    private TextView storageInfoView;
     private EditText searchView;
+    private CheckBox favoritesOnlyCheck;
     private RecyclerView recyclerView;
     private ImageAdapter imageAdapter;
 
     private final List<Post> postList = new ArrayList<>();
     private final List<Post> filteredPosts = new ArrayList<>();
+    private final Set<String> favoriteKeys = new HashSet<>();
 
+    private boolean showFavoritesOnly = false;
+    private String currentQuery = "";
     private Uri selectedImageUri;
     private String inputTitle;
     private String inputText;
 
     private CloadImage taskDownload;
+    private SharedPreferences sharedPreferences;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        Set<String> storedFavorites = sharedPreferences.getStringSet(PREF_FAVORITE_KEYS, new HashSet<>());
+        if (storedFavorites != null) {
+            favoriteKeys.addAll(storedFavorites);
+        }
+
         statusView = findViewById(R.id.textView);
+        storageInfoView = findViewById(R.id.textStorageInfo);
         searchView = findViewById(R.id.editSearch);
+        favoritesOnlyCheck = findViewById(R.id.checkFavoritesOnly);
         recyclerView = findViewById(R.id.recyclerView);
 
-        imageAdapter = new ImageAdapter(this::openFullscreen);
+        imageAdapter = new ImageAdapter(new ImageAdapter.Listener() {
+            @Override
+            public void onItemClick(Post post) {
+                openFullscreen(post);
+            }
+
+            @Override
+            public void onToggleFavorite(Post post) {
+                toggleFavorite(post);
+            }
+
+            @Override
+            public void onDelete(Post post) {
+                confirmDelete(post);
+            }
+        });
+
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setAdapter(imageAdapter);
 
@@ -86,6 +126,14 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
+        if (favoritesOnlyCheck != null) {
+            favoritesOnlyCheck.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                showFavoritesOnly = isChecked;
+                filterPosts(searchView != null ? searchView.getText().toString() : "");
+            });
+        }
+
+        updateStorageInfoFromPosts();
         loadPosts();
     }
 
@@ -161,29 +209,41 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void filterPosts(String query) {
-        String trimmed = query != null ? query.trim().toLowerCase() : "";
-        filteredPosts.clear();
+        currentQuery = query != null ? query.trim() : "";
+        String lowerQuery = currentQuery.toLowerCase();
 
-        if (trimmed.isEmpty()) {
-            filteredPosts.addAll(postList);
-        } else {
-            for (Post post : postList) {
-                if (containsIgnoreCase(post.getTitle(), trimmed) ||
-                        containsIgnoreCase(post.getContent(), trimmed) ||
-                        containsIgnoreCase(post.getAuthor(), trimmed)) {
-                    filteredPosts.add(post);
+        filteredPosts.clear();
+        for (Post post : postList) {
+            if (showFavoritesOnly && !post.isFavorite()) {
+                continue;
+            }
+            if (!lowerQuery.isEmpty()) {
+                if (!(containsIgnoreCase(post.getTitle(), lowerQuery)
+                        || containsIgnoreCase(post.getContent(), lowerQuery)
+                        || containsIgnoreCase(post.getAuthor(), lowerQuery))) {
+                    continue;
                 }
             }
+            filteredPosts.add(post);
         }
 
         imageAdapter.submitList(filteredPosts);
+        updateStatusText();
+    }
 
-        if (statusView != null) {
-            if (filteredPosts.isEmpty()) {
-                statusView.setText("검색 결과가 없습니다.");
+    private void updateStatusText() {
+        if (statusView == null) {
+            return;
+        }
+
+        if (filteredPosts.isEmpty()) {
+            if (postList.isEmpty()) {
+                statusView.setText("불러올 이미지가 없습니다.");
             } else {
-                statusView.setText("총 " + filteredPosts.size() + "개의 사진");
+                statusView.setText("검색/필터 결과가 없습니다.");
             }
+        } else {
+            statusView.setText("총 " + filteredPosts.size() + "개의 사진");
         }
     }
 
@@ -209,6 +269,70 @@ public class MainActivity extends AppCompatActivity {
         startActivity(intent);
     }
 
+    private void toggleFavorite(Post post) {
+        if (post == null) {
+            return;
+        }
+        boolean newState = !post.isFavorite();
+        post.setFavorite(newState);
+
+        String key = keyForPost(post);
+        if (newState) {
+            favoriteKeys.add(key);
+        } else {
+            favoriteKeys.remove(key);
+        }
+        persistFavorites();
+        filterPosts(currentQuery);
+    }
+
+    private void persistFavorites() {
+        sharedPreferences.edit()
+                .putStringSet(PREF_FAVORITE_KEYS, new HashSet<>(favoriteKeys))
+                .apply();
+    }
+
+    private void confirmDelete(Post post) {
+        if (post == null) return;  // ✅ 권한 제한 제거
+
+        new AlertDialog.Builder(this)
+                .setTitle("게시글 삭제")
+                .setMessage("정말 이 게시글을 삭제하시겠습니까?")
+                .setPositiveButton("삭제", (d, w) -> new DeletePostTask(post).execute())
+                .setNegativeButton("취소", null)
+                .show();
+    }
+
+
+    private void updateStorageInfoFromPosts() {
+        if (storageInfoView == null) {
+            return;
+        }
+
+        float usedMb = 0f;
+        for (Post post : postList) {
+            Bitmap bitmap = post.getBitmap();
+            if (bitmap != null) {
+                usedMb += bitmap.getByteCount() / (1024f * 1024f);
+            }
+        }
+        if (usedMb < 0f) {
+            usedMb = 0f;
+        }
+        float remainingMb = Math.max(TOTAL_CAPACITY_MB - usedMb, 0f);
+
+        storageInfoView.setText(String.format(Locale.getDefault(),
+                "서버 용량: %.1fMB 사용 / %.1fMB 남음 (총 %.1fMB)",
+                usedMb, remainingMb, TOTAL_CAPACITY_MB));
+    }
+
+    private String keyForPost(Post post) {
+        if (post.getId() >= 0) {
+            return "id_" + post.getId();
+        }
+        return "url_" + post.getImageUrl().hashCode();
+    }
+
     private class UploadTask extends AsyncTask<Void, Void, Boolean> {
         @Override
         protected Boolean doInBackground(Void... voids) {
@@ -216,13 +340,12 @@ public class MainActivity extends AppCompatActivity {
             DataOutputStream out = null;
             InputStream inputStream = null;
             try {
-                String token = "87af38f0adbac939bfd69b8063bb674cc9b85b5c";
                 String boundary = "----AndroidBoundary";
                 String LINE_FEED = "\r\n";
 
                 conn = (HttpURLConnection) new URL(postUrl).openConnection();
                 conn.setRequestMethod("POST");
-                conn.setRequestProperty("Authorization", "Token " + token);
+                conn.setRequestProperty("Authorization", "Token " + AUTH_TOKEN);
                 conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
                 conn.setDoOutput(true);
 
@@ -257,7 +380,7 @@ public class MainActivity extends AppCompatActivity {
                 out.flush();
 
                 int responseCode = conn.getResponseCode();
-                if (responseCode != 201) {
+                if (responseCode != 201 && responseCode != 200) {
                     BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getErrorStream()));
                     StringBuilder errorResponse = new StringBuilder();
                     String line;
@@ -268,7 +391,7 @@ public class MainActivity extends AppCompatActivity {
                     Log.e("UploadResponse", "Error Body: " + errorResponse);
                 }
 
-                return responseCode == 201;
+                return responseCode == 201 || responseCode == 200;
 
             } catch (Exception e) {
                 Log.e("UploadError", "Exception: " + e.getMessage(), e);
@@ -306,6 +429,53 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private class DeletePostTask extends AsyncTask<Void, Void, Boolean> {
+        private final Post targetPost;
+
+        DeletePostTask(Post targetPost) {
+            this.targetPost = targetPost;
+        }
+
+        @Override
+        protected Boolean doInBackground(Void... voids) {
+            if (targetPost.getId() < 0) {
+                return false;
+            }
+
+            HttpURLConnection conn = null;
+            try {
+                URL url = new URL(postUrl + targetPost.getId() + "/");
+                conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("DELETE");
+                conn.setRequestProperty("Authorization", "Token " + AUTH_TOKEN);
+                conn.connect();
+
+                int responseCode = conn.getResponseCode();
+                return responseCode == 204 || responseCode == 200;
+
+            } catch (Exception e) {
+                Log.e("DeleteError", "Delete failed", e);
+                return false;
+            } finally {
+                if (conn != null) {
+                    conn.disconnect();
+                }
+            }
+        }
+
+        @Override
+        protected void onPostExecute(Boolean success) {
+            Toast.makeText(MainActivity.this,
+                    success ? "삭제 성공" : "삭제 실패",
+                    Toast.LENGTH_SHORT).show();
+            if (success) {
+                favoriteKeys.remove(keyForPost(targetPost));
+                persistFavorites();
+                loadPosts();
+            }
+        }
+    }
+
     private class CloadImage extends AsyncTask<String, Integer, List<Post>> {
         @Override
         protected List<Post> doInBackground(String... urls) {
@@ -314,10 +484,9 @@ public class MainActivity extends AppCompatActivity {
 
             try {
                 String apiUrl = urls[0];
-                String token = "87af38f0adbac939bfd69b8063bb674cc9b85b5c";
                 URL urlAPI = new URL(apiUrl);
                 conn = (HttpURLConnection) urlAPI.openConnection();
-                conn.setRequestProperty("Authorization", "Token " + token);
+                conn.setRequestProperty("Authorization", "Token " + AUTH_TOKEN);
                 conn.setRequestMethod("GET");
 
                 InputStream is = conn.getInputStream();
@@ -325,6 +494,11 @@ public class MainActivity extends AppCompatActivity {
                 StringBuilder result = new StringBuilder();
                 String line;
                 while ((line = reader.readLine()) != null) {
+                    if (isCancelled()) {
+                        reader.close();
+                        is.close();
+                        return posts;
+                    }
                     result.append(line);
                 }
                 reader.close();
@@ -332,7 +506,11 @@ public class MainActivity extends AppCompatActivity {
 
                 JSONArray aryJson = new JSONArray(result.toString());
                 for (int i = 0; i < aryJson.length(); i++) {
+                    if (isCancelled()) {
+                        break;
+                    }
                     JSONObject postJson = aryJson.getJSONObject(i);
+
                     String imageUrl = postJson.optString("image", "");
                     if (imageUrl == null || imageUrl.isEmpty()) {
                         continue;
@@ -349,11 +527,14 @@ public class MainActivity extends AppCompatActivity {
                     imgStream.close();
                     imgConn.disconnect();
 
+                    int id = postJson.optInt("id", -1);
                     String title = postJson.optString("title", "");
                     String content = postJson.optString("text", postJson.optString("content", ""));
                     String author = resolveAuthor(postJson);
+                    boolean ownedByUser = isOwnedByCurrentUser(author, postJson);
+                    boolean isFavorite = favoriteKeys.contains(id >= 0 ? "id_" + id : "url_" + imageUrl.hashCode());
 
-                    posts.add(new Post(title, content, author, imageUrl, imageBitmap));
+                    posts.add(new Post(id, title, content, author, imageUrl, imageBitmap, ownedByUser, isFavorite));
                 }
 
             } catch (Exception e) {
@@ -368,20 +549,20 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         protected void onPostExecute(List<Post> posts) {
-            if (posts == null || posts.isEmpty()) {
-                postList.clear();
-                filteredPosts.clear();
-                imageAdapter.submitList(filteredPosts);
-                if (statusView != null) {
-                    statusView.setText("불러올 이미지가 없습니다.");
-                }
-                return;
-            }
-
             postList.clear();
-            postList.addAll(posts);
-            filterPosts(searchView != null ? searchView.getText().toString() : "");
+            if (posts != null) {
+                postList.addAll(posts);
+            }
+            updateStorageInfoFromPosts();
+            filterPosts(currentQuery);
         }
+    }
+
+    private boolean isOwnedByCurrentUser(String author, JSONObject postJson) {
+        if (author != null && !author.isEmpty()) {
+            return true;
+        }
+        return postJson.optBoolean("is_author", false) || postJson.optBoolean("is_owner", false);
     }
 
     private String resolveAuthor(JSONObject postJson) {

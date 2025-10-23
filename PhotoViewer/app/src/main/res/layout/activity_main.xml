@@ -30,6 +30,14 @@
             android:text="새로운 이미지 게시" />
     </LinearLayout>
 
+    <TextView
+        android:id="@+id/textStorageInfo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="서버 용량: 계산 중..."
+        android:textStyle="bold" />
+
     <EditText
         android:id="@+id/editSearch"
         android:layout_width="match_parent"
@@ -40,6 +48,13 @@
         android:singleLine="true"
         android:drawableStart="@android:drawable/ic_menu_search"
         android:drawablePadding="8dp"/>
+
+    <CheckBox
+        android:id="@+id/checkFavoritesOnly"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="즐겨찾기만 보기" />
 
     <TextView
         android:id="@+id/textView"
