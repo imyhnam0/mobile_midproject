@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Photo Blog</title>
+    <style>
+        body {
+            font-family: 'Pretendard', sans-serif;
+            background-color: #fffaf2;
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            background-color: #ff8800;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .container {
+            width: 90%;
+            margin: 30px auto;
+        }
+        .post {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .post h2 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .post small {
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+    <header>Photo blog</header>
+    <div class="container">
+        {% for post in posts %}
+        <div class="post">
+            <small>{{ post.created_at|date:"Y년 n월 j일 g:i a" }}</small>
+            <h2>{{ post.title }}</h2>
+            <p>{{ post.text|truncatechars:150 }}</p>
+        </div>
+        {% empty %}
+        <p>아직 작성된 글이 없습니다.</p>
+        {% endfor %}
+    </div>
+</body>
+</html>
+
