@@ -30,6 +30,17 @@
             android:text="새로운 이미지 게시" />
     </LinearLayout>
 
+    <EditText
+        android:id="@+id/editSearch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:hint="제목, 내용, 작성자 검색"
+        android:imeOptions="actionSearch"
+        android:singleLine="true"
+        android:drawableStart="@android:drawable/ic_menu_search"
+        android:drawablePadding="8dp"/>
+
     <TextView
         android:id="@+id/textView"
         android:layout_width="match_parent"
@@ -40,7 +51,8 @@
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerView"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
         android:layout_marginTop="16dp"
+        android:layout_weight="1"
         android:orientation="vertical" />
 </LinearLayout>

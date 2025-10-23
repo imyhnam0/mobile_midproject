@@ -22,6 +22,10 @@
         android:theme="@style/Theme.PhotoViewer"
         tools:targetApi="31">
         <activity
+            android:name=".FullscreenImageActivity"
+            android:exported="false"
+            android:theme="@style/Theme.PhotoViewer" />
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:theme="@style/Theme.PhotoViewer">
