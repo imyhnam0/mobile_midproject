@@ -1,0 +1,38 @@
+# --- Python (Django) ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.log
+*.sqlite3
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Django static/media
+media/
+staticfiles/
+db.sqlite3
+
+# --- Android ---
+.gradle/
+build/
+**/build/
+.idea/
+*.iml
+local.properties
+captures/
+output.json
+
+# Keystore / Firebase
+*.jks
+*.keystore
+google-services.json
+
+# --- General ---
+.DS_Store
+.vscode/
+
