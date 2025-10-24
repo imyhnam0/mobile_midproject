@@ -1,0 +1,8 @@
+GET /api_root/Post/ HTTP/1.1
+Host: 127.0.0.1:8000
+Accept: */*
+Authorization: Token bf46b8f9337d1d27b4ef2511514c798be1a954b8
+User-Agent: curl-test/1.0
+Connection: Keep-Alive
+Accept-Encoding: gzip
+

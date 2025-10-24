@@ -42,14 +42,15 @@
     <header>Photo blog</header>
     <div class="container">
         {% for post in posts %}
-        <div class="post">
-            <small>{{ post.created_at|date:"Y년 n월 j일 g:i a" }}</small>
-            <h2>{{ post.title }}</h2>
-            <p>{{ post.text|truncatechars:150 }}</p>
-        </div>
-        {% empty %}
-        <p>아직 작성된 글이 없습니다.</p>
+            <div class="card">
+                <p style="color: gray; font-size: 14px;">
+                    {{ post.created_date|date:"Y년 n월 j일 g:i a" }}
+                </p>
+                <h2>{{ post.title }}</h2>
+                <p>{{ post.text }}</p>
+            </div>
         {% endfor %}
+
     </div>
 </body>
 </html>
